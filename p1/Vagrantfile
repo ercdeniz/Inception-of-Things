@@ -1,5 +1,5 @@
 Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/focal64"
+  config.vm.box = "debian/bullseye64"
   config.vm.define "ercdenizS" do |server|
     server.vm.hostname = "ercdenizS"
     server.vm.network "private_network", ip: "192.168.56.110"
