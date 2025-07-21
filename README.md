@@ -363,3 +363,24 @@ app-one                                app-two (3 replica)
 
 
 makine silindiği halde bu makine zaten var gibi bir hata alırsak VirtualBox'ın yoluna gidip makineyi silip tekrar deneyebiliriz.
+
+
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   DEVELOPER     │    │   GITHUB REPO   │    │   ARGO CD       │
+│                 │───▶│                 │───▶│                 │
+│ - Code değişir  │    │ - YAML files    │    │ - Değişiklikleri│
+│ - Git push      │    │ - deploy.yaml   │    │   algılıyor     │
+│                 │    │ - service.yaml  │    │ - Sync yapıyor  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                        │
+                                                        ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   END USER      │    │   APPLICATION   │    │   KUBERNETES    │
+│                 │◀───│                 │◀───│                 │
+│ - Browser'dan   │    │ - Pod çalışıyor │    │ - Cluster       │
+│   erişiyor      │    │ - Port 8888     │    │ - Namespaces    │
+│ - API response  │    │ - v1 veya v2    │    │ - Services      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```

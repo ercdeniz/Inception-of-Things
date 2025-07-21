@@ -1,29 +1,3 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app-two-html
-data:
-  index.html: |
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Hello Kubernetes!</title>
-      <style>
-        body {
-          background-color: #1e1e1e;
-          color: white;
-          font-family: sans-serif;
-          text-align: center;
-          padding-top: 100px;
-        }
-      </style>
-    </head>
-    <body>
-      <h1>Hello from app2.</h1>
-    </body>
-    </html>
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,23 +14,16 @@ spec:
     spec:
       containers:
         - name: app-two
-          image: nginx
-          volumeMounts:
-            - name: html
-              mountPath: /usr/share/nginx/html
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "250m"
-            limits:
-              memory: "128Mi"
-              cpu: "500m"
-      volumes:
-        - name: html
-          configMap:
-            name: app-two-html
-
+          image: paulbouwer/hello-kubernetes:1
+          ports:
+          - containerPort: 80
+          env:
+          - name: MESSAGE
+            value: "Hello from app2"
+          - name: PORT
+            value: "80"
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -67,4 +34,3 @@ spec:
   ports:
     - port: 80
       targetPort: 80
-  type: ClusterIP
