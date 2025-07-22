@@ -1,4 +1,2 @@
 .vagrant/
 shared/
-*.pid
-*.auth
