@@ -384,19 +384,3 @@ makine silindiği halde bu makine zaten var gibi bir hata alırsak VirtualBox'ı
 │ - API response  │    │ - v1 veya v2    │    │ - Services      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
-
-```
-+-------------------------------+
-|         Kubernetes Cluster    |
-|                               |
-|  [Namespace: argocd]          |
-|    - argocd-server            |
-|    - argocd-repo-server       |
-|    - ...                      |
-|                               |
-|  [Namespace: dev]             |
-|    - wil-playground-pod       |
-|    - wil-playground-service   |
-|    - wil-playground-deployment|
-+-------------------------------+
-```
