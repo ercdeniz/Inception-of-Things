@@ -1,7 +1,5 @@
 #!/bin/bash
 
-apt update && apt install -y curl
-
 for i in {1..20}; do
   if [ -f /vagrant/shared/node-token ]; then
     break

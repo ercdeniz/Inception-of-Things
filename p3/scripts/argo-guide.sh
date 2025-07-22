@@ -28,8 +28,4 @@ echo -e "${GREEN}4. CREATE → ardından SYNC → APPLY yap${NC}"
 echo -e "${GREEN}5. Uygulama pod’unu kontrol et:${NC}"
 echo "   kubectl get pods -n dev"
 
-echo -e "${GREEN}6. Servis varsa port yönlendir:${NC}"
-echo "   kubectl port-forward svc/test-app -n dev 9999:80"
-echo "   http://localhost:9999"
-
-echo -e "\n${GREEN}✅ Uygulama başarıyla deploy edildi!${NC}"
+echo -e "${GREEN}6. Port yönlendir => scripts/forward.sh${NC}"

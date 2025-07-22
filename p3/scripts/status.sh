@@ -22,3 +22,7 @@ echo -e "\n-----------------------------\n"
 echo -e "${GREEN}[+] ArgoCD Applications:${NC}"
 kubectl get applications -n argocd
 echo -e "\n-----------------------------\n"
+
+echo -e "${GREEN}[+] Kubectl Listening Ports:${NC}"
+lsof -i -P -n | grep LISTEN | grep kubectl
+echo -e "\n-----------------------------\n"
