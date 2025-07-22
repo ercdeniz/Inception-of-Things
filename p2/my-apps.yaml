@@ -1,0 +1,237 @@
+# ------------------- UYGULAMA 1 -------------------
+
+# App1 için özel index.html sayfasını tutan ConfigMap
+apiVersion: v1 # Bu nesnenin Kubernetes API'sinin hangi versiyonuna ait olduğunu belirtir. ConfigMap ve Service gibi temel nesneler genellikle v1'dir.
+kind: ConfigMap # Oluşturmak istediğimiz nesnenin türünü belirtir.
+metadata: # Nesne hakkındaki üst verileri içerir.
+  name: app-one-html  # Bu ConfigMap'e verdiğimiz benzersiz isim. Daha sonra Deployment içinde bu ismi kullanarak ona referans vereceğiz.
+data:  # Asıl verinin tutulduğu yerdir.
+  index.html: | # Burada index.html adında bir anahtar (key) oluşturuyoruz. Bu, daha sonra Pod içinde oluşacak dosyanın adı olacaktır. | karakteri, takip eden metnin çok satırlı bir string olduğunu belirtir.
+    <!DOCTYPE html>
+    <html>
+    <head><title>App1</title></head>
+    <body><h1>Merhaba, burasi Uygulama 1 (app1.com)</h1></body>
+    </html>
+
+---
+# App1'i çalıştıracak olan Deployment
+apiVersion: apps/v1
+kind: Deployment # Nesne türü "Dağıtım". Deployment'ın ana görevi, belirtilen sayıda Pod'un (uygulama kopyasının) her zaman çalışır durumda olmasını sağlamaktır.
+metadata:
+  name: app-one-deployment
+spec: # Nesnenin "istenen durumu"nu tanımlayan en önemli bölümdür
+  replicas: 1 # Bu Deployment'ın 1 adet Pod oluşturup yönetmesini istiyoruz. (App2'de bu değer 3'tür).
+  selector: # Bu Deployment'ın hangi Pod'ları yönetmesi gerektiğini tanımlar.
+    matchLabels: # "Üzerinde app: app-one etiketi olan tüm Pod'lar benim kontrolüm altındadır" der. Bu, Deployment ile Pod'lar arasındaki bağlantıdır.
+      app: app-one
+  template: # Bu bölüm, Deployment'ın oluşturacağı Pod'ların şablonudur (blueprint).
+    metadata: # İşte burada Pod'a o kritik etiketi veriyoruz. Bu etiket, yukarıdaki selector ile eşleşmelidir. Eşleşmezse, Deployment Pod'ları bulamaz ve hata verir.
+      labels:
+        app: app-one
+    spec: # (Pod'un spec'i): Pod'un kendi özelliklerini tanımlar.
+      containers: # Pod içinde çalışacak konteynerlerin listesi
+      - name: app-one-container
+        image: nginx:alpine # Konteynerin hangi imajdan oluşturulacağı. nginx:alpine küçük ve verimli bir web sunucusudur.
+        ports: # Konteynerin Pod içinde 80 numaralı portu dinlediğini belirtir.
+        - containerPort: 80
+        volumeMounts: # Konteynerin içine bir "disk" (volume) bağlar
+        - name: html-volume # Aşağıda volumes bölümünde tanımlanan html-volume adlı diski kullan.
+          mountPath: /usr/share/nginx/html # Bu diski, konteynerin içindeki /usr/share/nginx/html dizinine bağla. Nginx'in varsayılan olarak web dosyalarını sunduğu yer burasıdır. Bu işlem, o dizindeki orijinal dosyaların üzerine yazar.
+      volumes: # Pod için mevcut olan "disklerin" listesi.    
+      - name: html-volume # html-volume adında bir disk tanımlar.
+        configMap:
+          name: app-one-html # Bu diskin kaynağının, yukarıda oluşturduğumuz app-one-html adlı ConfigMap olduğunu belirtir.
+# Özetle:
+# Bu Deployment, üzerinde app: app-one etiketi olan 1 Pod oluşturur.
+# Pod içerisinde bir Nginx konteyneri çalıştırılır.
+# Nginx konteynerinin web kök dizinine, app-one-html adlı ConfigMap'ten alınan index.html dosyası yerleştirilir.
+# Böylece Nginx sunucusu, ConfigMap'teki index.html içeriğini servis eder.
+---
+# App1 Pod'larına küme içinden erişim için Service
+apiVersion: v1
+kind: Service # Nesne türü "Servis". Amacı, bir grup Pod'a tek ve sabit bir erişim noktası sağlamaktır. Pod'lar ölüp yeniden oluşturulduklarında IP adresleri değişir, ancak Servis'in IP'si sabit kalır.
+metadata:
+  name: app-one-service
+spec: 
+  selector: # Servis'in en kritik parçasıdır. "Üzerinde app: app-one etiketi olan tüm Pod'lara gelen trafiği yönlendir" der. Bu, Service ile Pod'lar arasındaki bağlantıdır.
+    app: app-one
+  ports:
+    - protocol: TCP
+      port: 80 # Bu Servis'in kendisi 80 numaralı portta dinleme yapar.
+      targetPort: 80 # Servis'e gelen trafiği, seçtiği Pod'un 80 numaralı portuna (containerPort) yönlendirir.
+
+# ------------------- UYGULAMA 2 (3 Kopya) -------------------
+
+---
+# App2 için özel index.html
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-two-html
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>App2</title></head>
+    <body style="background-color: lightblue;"><h1>Merhaba, burasi Uygulama 2 (app2.com)</h1></body>
+    </html>
+
+---
+# App2'yi çalıştıracak olan Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-two-deployment
+spec:
+  replicas: 3 # Görevde istendiği gibi 3 kopya!
+  selector:
+    matchLabels:
+      app: app-two
+  template:
+    metadata:
+      labels:
+        app: app-two
+    spec:
+      containers:
+      - name: app-two-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: app-two-html
+
+---
+# App2 Pod'larına küme içinden erişim için Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-two-service
+spec:
+  selector:
+    app: app-two
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+# ------------------- UYGULAMA 3 (Varsayılan) -------------------
+
+---
+# App3 için özel index.html
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-three-html
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>App3</title></head>
+    <body style="background-color: lightgreen;"><h1>Merhaba, burasi VARSAYILAN Uygulama 3</h1></body>
+    </html>
+
+---
+# App3'ü çalıştıracak olan Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-three-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-three
+  template:
+    metadata:
+      labels:
+        app: app-three
+    spec:
+      containers:
+      - name: app-three-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: app-three-html
+
+---
+# App3 Pod'larına küme içinden erişim için Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-three-service
+spec:
+  selector:
+    app: app-three
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+# ------------------- INGRESS (YÖNLENDİRİCİ) -------------------
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress # Dış dünyadan gelen HTTP ve HTTPS trafiğini küme içindeki Servis'lere yönlendiren kuralları tanımlar.
+metadata:
+  name: my-app-ingress
+  annotations:
+    # Ingress denetleyicisine (K3s'te varsayılan olarak Traefik) özel talimatlar vermek için kullanılır. kubernetes.io/ingress.class: "traefik" ifadesi, "Bu Ingress kurallarını Traefik işlesin" anlamına gelir.
+    kubernetes.io/ingress.class: "traefik"
+spec: # Yönlendirme mantığını içerir.
+  defaultBackend: # Bu bir varsayılan kuraldır. Gelen istek, aşağıdaki rules bölümündeki hiçbir host (alan adı) ile eşleşmezse, trafik buraya yönlendirilir.
+    service:
+      name: app-three-service
+      port:
+        number: 80
+  rules:
+  - host: "app1.com" # Eğer Host başlığı app1.com ise
+    http:
+      paths: # Bu host için yol bazlı kurallar.
+      - path: /
+        pathType: Prefix # / ile başlayan tüm yolları eşleştir (yani app1.com'a gelen her şeyi).
+        backend:
+          service: # Eşleşme durumunda trafiğin gönderileceği yer
+            name: app-one-service # Trafiği App1'e yönlendir
+            port:
+              number: 80
+  - host: "app2.com" # Eğer Host başlığı app2.com ise
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-two-service # Trafiği App2'ye yönlendir
+            port:
+              number: 80
+  - http: # <-- YENİ VARSAYILAN KURAL. 'host' anahtarı YOK!
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-three-service # Trafiği App3'e yönlendir
+            port:
+              number: 80
+
+# Akışın Tamamı
+# Bir kullanıcı http://app1.com adresine istek gönderir. (Bu isteğin 192.168.56.110'a gitmesi için hosts dosyası ayarlanmış veya curl ile özel başlık gönderilmiştir).
+# İstek, K3s'in Traefik Ingress Controller'ına ulaşır.
+# Traefik, my-app-ingress nesnesindeki kurallara bakar.
+# İsteğin Host başlığının app1.com olduğunu görür ve ilgili kuralı bulur.
+# Kural, trafiğin app-one-service'e yönlendirilmesini söyler.
+# app-one-service, üzerinde app: app-one etiketi olan Pod'ları arar.
+# app-one-deployment tarafından yönetilen Pod'u bulur ve isteği o Pod'un 80 numaralı portuna iletir.
+# Pod'un içindeki Nginx, isteği alır ve ConfigMap'ten gelen index.html dosyasını kullanıcıya sunar.
+# Bu yapı, Kubernetes'in gücünü gösterir: Her bir bileşen kendi işine odaklanır ve etiketler (labels) ve seçiciler (selectors) aracılığıyla birbirine gevşek bir şekilde bağlanır. Bu da sistemi esnek ve yönetilebilir kılar.
