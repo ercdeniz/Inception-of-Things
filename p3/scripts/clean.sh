@@ -4,21 +4,24 @@ set -e
 RED="\033[0;31m"
 RESET="\033[0m"
 
-printf "${RED}>>> Deleting ArgoCD port-forward if exists...${RESET}\n"
-
-rm -rf "Argo Authentication Info.auth"
-
-if [ -f .argocd_port_forward.pid ]; then
-  kill $(cat .argocd_port_forward.pid) 2>/dev/null || true
-  rm -rf .argocd_port_forward.pid
+# Check if the first argument is provided
+if [ -z "$1" ]; then
+  echo -e "\033[0;31m[ERROR] Cluster name is required as the first argument.\033[0m"
+  echo -e "\033[1;33mUsage: bash scripts/clean.sh <cluster-name>\033[0m"
+  exit 1
 fi
 
-echo -e "${RED}>>> Stopping app port-forward if exists...${RESET}"
-if [ -f .app_port_forward.pid ]; then
-    kill $(cat .app_port_forward.pid) 2>/dev/null || true
-    rm -f .app_port_forward.pid
-fi
+# Get the cluster name from the first argument
+CLUSTER_NAME="$1"
 
-printf "${RED}>>> Deleting K3D cluster...${RESET}\n"
+# Stop all port-forward processes
+printf "${RED}>>> Stopping all port-forwards...${RESET}\n"
+bash scripts/stop-forward.sh
 
-k3d cluster delete iot-cluster
+# Delete the ArgoCD authentication info file
+printf "${RED}>>> Deleting Argo Authentication Info...${RESET}\n"
+rm -f "*.auth"
+
+# Delete the K3D cluster
+printf "${RED}>>> Deleting K3D cluster '${CLUSTER_NAME}'...${RESET}\n"
+k3d cluster delete "${CLUSTER_NAME}"
