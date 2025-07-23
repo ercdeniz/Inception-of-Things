@@ -18,20 +18,20 @@ if [ -z "$NAMESPACE" ]; then
 fi
 
 GREEN="\033[0;32m"
-RESET="\033[0m"
+NC="\033[0m"
 
 # Stopping previous port-forwarding if exists
-printf "${GREEN}>>> Stopping previous port-forwarding...${RESET}\n"
+printf "${GREEN}>>> Stopping previous port-forwarding...${NC}\n"
 kill $(ps aux | grep "[k]ubectl port-forward" | awk '{print $2}') 2>/dev/null || true
 
 # Starting port-forwarding for ArgoCD
-printf "${GREEN}>>> Starting port-forward for ArgoCD on port ${PORT}...${RESET}\n"
+printf "${GREEN}>>> Starting port-forward for ArgoCD on port ${PORT}...${NC}\n"
 kubectl port-forward svc/argocd-server -n $NAMESPACE $PORT:443 &>/dev/null &
 
 # Save the PID of the port-forward process
 echo $! > .argocd_port_forward.pid
 
-printf "${GREEN}>>> ArgoCD is accessible at https://localhost:${PORT}${RESET}\n"
+printf "${GREEN}>>> ArgoCD is accessible at https://localhost:${PORT}${NC}\n"
 
 # Get ArgoCD password
 bash scripts/get-password.sh

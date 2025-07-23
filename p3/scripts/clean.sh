@@ -2,7 +2,7 @@
 set -e
 
 RED="\033[0;31m"
-RESET="\033[0m"
+NC="\033[0m"
 
 # Check if the first argument is provided
 if [ -z "$1" ]; then
@@ -15,13 +15,13 @@ fi
 CLUSTER_NAME="$1"
 
 # Stop all port-forward processes
-printf "${RED}>>> Stopping all port-forwards...${RESET}\n"
+printf "${RED}>>> Stopping all port-forwards...${NC}\n"
 bash scripts/stop-forward.sh
 
 # Delete the ArgoCD authentication info file
-printf "${RED}>>> Deleting Argo Authentication Info...${RESET}\n"
-rm -f "*.auth"
+printf "${RED}>>> Deleting Argo Authentication Info...${NC}\n"
+rm -f *.auth
 
 # Delete the K3D cluster
-printf "${RED}>>> Deleting K3D cluster '${CLUSTER_NAME}'...${RESET}\n"
+printf "${RED}>>> Deleting K3D cluster '${CLUSTER_NAME}'...${NC}\n"
 k3d cluster delete "${CLUSTER_NAME}"
