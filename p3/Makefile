@@ -22,7 +22,7 @@ clean:
 	@bash scripts/clean.sh $(CLUSTER_NAME)
 
 status:
-	@bash scripts/status.sh $(CLUSTER_NAME)
+	@bash scripts/status.sh $(CLUSTER_NAME) || true
 
 fw:
 	@bash scripts/start-forward.sh $(APP_NAME) $(APP_NAMESPACE) $(APP_LOCAL_PORT) $(APP_REMOTE_PORT)

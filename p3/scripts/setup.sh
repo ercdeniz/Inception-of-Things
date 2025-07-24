@@ -12,7 +12,7 @@ if [ ! -x "$(command -v k3d)" ] || [ ! -x "$(command -v docker)" ] || [ ! -x "$(
     bash scripts/install.sh
   else
     echo -e "${RED}>>> Installation cancelled. Please install the required programs.${NC}"
-    exit 1  
+    exit 1
   fi
 fi
 
@@ -34,8 +34,7 @@ if k3d cluster list | grep -q "${CLUSTER_NAME}"; then
     echo -e "${YELLOW}>>> Cluster '${CLUSTER_NAME}' already exists.${NC}"
     read -p "$(echo -e "${YELLOW}>>> Do you want to delete and recreate it? (y/n): ${NC}")" answer
     if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
-        echo -e "${RED}>>> Deleting existing cluster...${NC}"
-        k3d cluster delete "${CLUSTER_NAME}"
+        bash scripts/clean.sh "${CLUSTER_NAME}"
     else
         echo -e "${YELLOW}>>> Setup aborted.${NC}"
         exit 0
@@ -44,7 +43,7 @@ fi
 
 # Create a new K3D cluster
 echo -e "${GREEN}>>> Creating cluster '${CLUSTER_NAME}'...${NC}"
-k3d cluster create "${CLUSTER_NAME}"
+k3d cluster create "${CLUSTER_NAME}" --port "8888:30080"
 
 # Create namespaces
 echo -e "${GREEN}>>> Creating namespaces...${NC}"
@@ -70,5 +69,8 @@ printf "\n${GREEN}>>> ArgoCD is ready.${NC}\n"
 
 # Start port-forwarding for ArgoCD
 bash scripts/start-argocd.sh "${ARGOCD_PORT}" "argocd"
+
+# Display guidance for accessing ArgoCD
+bash scripts/argo-guide.sh
 
 echo -e "${GREEN}>>> Setup complete for '${CLUSTER_NAME}'${NC}"
