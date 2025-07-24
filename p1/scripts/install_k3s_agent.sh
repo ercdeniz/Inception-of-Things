@@ -1,4 +1,6 @@
 #!/bin/bash
+apt-get update
+apt-get install -y curl
 
 for i in {1..20}; do
   if [ -f /vagrant/shared/node-token ]; then
