@@ -163,14 +163,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: my-app-ingress
-  annotations:
-    kubernetes.io/ingress.class: "traefik"
 spec:
-  defaultBackend:
-    service:
-      name: app-three-service
-      port:
-        number: 80
+  ingressClassName: "traefik"
   rules:
   - host: "app1.com"
     http:
