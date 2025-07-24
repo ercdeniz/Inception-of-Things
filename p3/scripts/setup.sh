@@ -43,7 +43,7 @@ fi
 
 # Create a new K3D cluster
 echo -e "${GREEN}>>> Creating cluster '${CLUSTER_NAME}'...${NC}"
-k3d cluster create "${CLUSTER_NAME}"
+k3d cluster create "${CLUSTER_NAME}" --port "8888:30080"
 
 # Create namespaces
 echo -e "${GREEN}>>> Creating namespaces...${NC}"
