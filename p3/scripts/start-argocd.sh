@@ -14,7 +14,7 @@ PORT="$1"
 # Check if the second argument is provided, otherwise use default namespace
 NAMESPACE="$2"
 if [ -z "$NAMESPACE" ]; then
-  NAMESPACE="argocd"  # Varsayılan namespace
+  NAMESPACE="argocd"
 fi
 
 GREEN="\033[0;32m"

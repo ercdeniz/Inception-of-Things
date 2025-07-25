@@ -70,6 +70,38 @@ printf "\n${GREEN}>>> ArgoCD is ready.${NC}\n"
 # Start port-forwarding for ArgoCD
 bash scripts/start-argocd.sh "${ARGOCD_PORT}" "argocd"
 
+# Create ArgoCD application
+kubectl apply -f ./confs/app.yaml -n argocd
+
+
+# Wait for ArgoCD application to become Synced and Healthy
+echo -e "${GREEN}>>> Waiting for ArgoCD application to become Synced and Healthy...${NC}"
+
+ARGO_APP_NAME="test-app"
+TIMEOUT=300
+INTERVAL=10
+ELAPSED=0
+
+while true; do
+  SYNC_STATUS=$(kubectl get application ${ARGO_APP_NAME} -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "NotFound")
+  HEALTH_STATUS=$(kubectl get application ${ARGO_APP_NAME} -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "NotFound")
+
+  if [[ "${SYNC_STATUS}" == "Synced" && "${HEALTH_STATUS}" == "Healthy" ]]; then
+    echo -e "${GREEN}>>> ArgoCD application is Synced and Healthy.${NC}"
+    break
+  fi
+
+  if [[ ${ELAPSED} -ge ${TIMEOUT} ]]; then
+    echo -e "${RED}>>> Timeout: ArgoCD application did not reach Synced & Healthy state in 5 minutes.${NC}"
+    echo -e "${YELLOW}>>> Last known status: Sync=${SYNC_STATUS}, Health=${HEALTH_STATUS}${NC}"
+    exit 1
+  fi
+
+  echo -e "${YELLOW}>>> Waiting... (Current Status: Sync=${SYNC_STATUS}, Health=${HEALTH_STATUS})${NC}"
+  sleep ${INTERVAL}
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
 # Display guidance for accessing ArgoCD
 bash scripts/argo-guide.sh
 
