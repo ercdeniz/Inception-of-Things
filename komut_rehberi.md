@@ -143,3 +143,9 @@ kubectl top nodes
 kubectl get namespaces
 kubectl create namespace <namespace_name>
 ```
+
+### Traefik'i kontrol et
+```bash
+sudo kubectl get pods -n kube-system | grep traefik
+sudo kubectl get svc -n kube-system | grep traefik
+```

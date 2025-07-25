@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-one-html
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>App1</title></head>
+    <body><h1>Merhaba, burasi Uygulama 1 (app1.com)</h1></body>
+    </html>
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-one-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-one
+  template:
+    metadata:
+      labels:
+        app: app-one
+    spec:
+      containers:
+      - name: app-one-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: app-one-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-one-service
+spec: 
+  selector:
+    app: app-one
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-two-html
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>App2</title></head>
+    <body style="background-color: lightblue;"><h1>Merhaba, burasi Uygulama 2 (app2.com)</h1></body>
+    </html>
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-two-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-two
+  template:
+    metadata:
+      labels:
+        app: app-two
+    spec:
+      containers:
+      - name: app-two-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: app-two-html
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-two-service
+spec:
+  selector:
+    app: app-two
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-three-html
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>App3</title></head>
+    <body style="background-color: lightgreen;"><h1>Merhaba, burasi VARSAYILAN Uygulama 3</h1></body>
+    </html>
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-three-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-three
+  template:
+    metadata:
+      labels:
+        app: app-three
+    spec:
+      containers:
+      - name: app-three-container
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: app-three-html
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-three-service
+spec:
+  selector:
+    app: app-three
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app-ingress
+spec:
+  ingressClassName: "traefik"
+  rules:
+  - host: "app1.com"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-one-service
+            port:
+              number: 80
+  - host: "app2.com"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-two-service
+            port:
+              number: 80
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-three-service
+            port:
+              number: 80
+
+# Complete Flow
+# A user sends a request to http://app1.com. (For this request to go to 192.168.56.110, the hosts file must be configured or curl with custom headers must be sent).
+# The request reaches K3s's Traefik Ingress Controller.
+# Traefik looks at the rules in the my-app-ingress object.
+# It sees that the request's Host header is app1.com and finds the relevant rule.
+# The rule says to redirect traffic to app-one-service.
+# app-one-service searches for Pods with the app: app-one label.
+# It finds the Pod managed by app-one-deployment and forwards the request to port 80 of that Pod.
+# The Nginx inside the Pod receives the request and serves the index.html file from the ConfigMap to the user.
+# This structure demonstrates the power of Kubernetes: Each component focuses on its own task and is loosely connected to each other through labels and selectors. This makes the system flexible and manageable.
