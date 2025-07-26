@@ -1,402 +1,133 @@
-# Inception of Things – P1 + P2 Notları
+# K3s ve GitOps ile Modern Altyapı Otomasyonu Projesi
 
-## 📉 Proje Yapısı
+Bu proje, modern bir Kubernetes altyapısının sıfırdan nasıl kurulduğunu, manuel olarak nasıl yönetildiğini ve son olarak GitOps prensipleriyle nasıl tamamen otomatize edildiğini adım adım gösteren kapsamlı bir kılavuzdur.
+
+## Proje Felsefesi ve Yapısı
+
+Proje, basitten karmaşığa doğru ilerleyen üç ana bölümden oluşur. Her bölüm, bir önceki üzerine yeni bir yetenek katmanı ekler:
+
+1.  **Temel Kurulum (`p1`):** Vagrant ve sanal makinelerle elle tutulur bir Kubernetes cluster'ı oluşturma.
+2.  **Manuel Dağıtım (`p2`):** Cluster üzerine uygulamaları ve ağ kurallarını `kubectl` ile manuel olarak dağıtma.
+3.  **Tam Otomasyon (`p3`):** `kubectl` ihtiyacını ortadan kaldırıp, tüm uygulama yaşam döngüsünü **Git** üzerinden yönetme (GitOps).
+
+### Genel Gereksinimler Özeti
+
+| Bölüm | Amaç | Öne Çıkan Ayrıntılar |
+| :--- | :--- | :--- |
+| **Bölüm 1** | K3s & Vagrant | **2 CPU / 2048 MB RAM** ile 2 VM (Controller/Agent), sabit IP, `ercdenizS`/`ercdenizSW` isimlendirmesi. |
+| **Bölüm 2** | K3s & 3 Uygulama | Tek VM'de Ingress ile host tabanlı yönlendirme. `app2` için **en az 3 replica**. `app1.com`, `app2.com` ve varsayılan olarak `app3`. |
+| **Bölüm 3** | K3d & Argo CD | Vagrant'sız, K3d + Argo CD ile Git tabanlı CI/CD. `argocd` ve `dev` namespace'leri. Sürüm değişimi Git'ten tetiklenmeli. |
+| **Bonus** | GitLab Entegrasyonu | GitOps akışını, cluster içinde çalışan yerel bir GitLab deposu üzerinden yönetmek. |
+
+### Proje Dosya Yapısı
 
 ```
-inception-of-things/
 ├── p1/
 │   ├── Vagrantfile
 │   └── scripts/
-│       ├── install_k3s_server.sh
-│       └── install_k3s_agent.sh
 ├── p2/
 │   ├── Vagrantfile
-│   ├── scripts/
-│   │   └── install_k3s_server.sh
 │   └── conf/
-│       ├── app1.yaml
-│       ├── app2.yaml
-│       ├── app3.yaml
-│       └── ingress.yaml
+└── p3/
+    ├── Makefile
+    ├── confs/
+    └── scripts/
 ```
 
 ---
 
-## ✅ Part 1 – K3s Server + Agent
+## Bölüm 1: K3s & Vagrant ile Temel Cluster Kurulumu (`p1`)
 
-### Amaç
+Bu bölümde, Vagrant kullanılarak bir controller (`ercdenizS`) ve bir agent (`ercdenizSW`) düğümünden oluşan 2-nodelu bir K3s cluster'ı kurulur.
 
-İki ayrı VM’de:
+**Anahtar Kavram:** Bu adım, `Vagrantfile` ve basit shell betikleri aracılığıyla altyapının kod olarak (Infrastructure as Code) nasıl tanımlanacağını gösterir.
 
-* `ercdenizS`: K3s server
-* `ercdenizSW`: K3s agent
+### Kurulum
 
-### Vagrantfile (p1/Vagrantfile)
-
-```ruby
-Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/focal64"
-
-  config.vm.define "ercdenizS" do |server|
-    server.vm.hostname = "ercdenizS"
-    server.vm.network "private_network", ip: "192.168.56.110"
-    server.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
-      vb.cpus = 1
-    end
-    server.vm.provision "shell", path: "scripts/install_k3s_server.sh"
-  end
-
-  config.vm.define "ercdenizSW" do |worker|
-    worker.vm.hostname = "ercdenizSW"
-    worker.vm.network "private_network", ip: "192.168.56.111"
-    worker.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
-      vb.cpus = 1
-    end
-    worker.vm.provision "shell", path: "scripts/install_k3s_agent.sh"
-  end
-end
-```
-
-### install\_k3s\_server.sh
-
+`p1` dizinindeyken tek bir komut yeterlidir:
 ```bash
-#!/bin/bash
-
-curl -sfL https://get.k3s.io | sh -
-
-mkdir -p /vagrant/shared
-cp /var/lib/rancher/k3s/server/node-token /vagrant/shared/node-token
-```
-
-### install\_k3s\_agent.sh
-
-```bash
-#!/bin/bash
-
-for i in {1..12}; do
-  if [ -f /vagrant/shared/node-token ]; then
-    break
-  fi
-  echo "Token bekleniyor..."
-  sleep 5
-done
-
-TOKEN=$(cat /vagrant/shared/node-token)
-MASTER_IP="192.168.56.110"
-
-curl -sfL https://get.k3s.io | K3S_URL="https://${MASTER_IP}:6443" K3S_TOKEN="$TOKEN" sh -
-```
-
----
-
-## ✅ Part 2 – Tek VM + Ingress + 3 App
-
-### Amaç
-
-Tek bir VM içinde 3 uygulama, Ingress ile host tabanlı yönlendirme:
-
-* `app1.com` → nginx
-* `app2.com` → httpd (3 replica)
-* diğer domain → app3 (fallback)
-
-### Vagrantfile (p2/Vagrantfile)
-
-```ruby
-Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/focal64"
-
-  config.vm.define "ercdenizS" do |server|
-    server.vm.hostname = "ercdenizS"
-    server.vm.network "private_network", ip: "192.168.56.110"
-    server.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
-      vb.cpus = 1
-    end
-    server.vm.provision "shell", path: "scripts/install_k3s_server.sh"
-  end
-end
-```
-
-### install\_k3s\_server.sh (p2/scripts)
-
-```bash
-#!/bin/bash
-
-curl -sfL https://get.k3s.io | sh -
-
-mkdir -p /home/vagrant/.kube
-cp /etc/rancher/k3s/k3s.yaml /home/vagrant/.kube/config
-chown -R vagrant:vagrant /home/vagrant/.kube
-```
-
----
-
-## 📦 Uygulama YAML Dosyaları (p2/conf)
-
-### app1.yaml
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app-one
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: app1
-  template:
-    metadata:
-      labels:
-        app: app1
-    spec:
-      containers:
-      - name: nginx
-        image: nginx
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: app-one
-spec:
-  selector:
-    app: app1
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 80
-```
-
-### app2.yaml
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app-two
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: app2
-  template:
-    metadata:
-      labels:
-        app: app2
-    spec:
-      containers:
-      - name: httpd
-        image: httpd
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: app-two
-spec:
-  selector:
-    app: app2
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 80
-```
-
-### app3.yaml
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app-three-html
-data:
-  index.html: |
-    <html><body><h1>This is the fallback app (app3)</h1></body></html>
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app-three
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: app3
-  template:
-    metadata:
-      labels:
-        app: app3
-    spec:
-      containers:
-      - name: app3
-        image: nginx
-        volumeMounts:
-        - name: html
-          mountPath: /usr/share/nginx/html
-      volumes:
-      - name: html
-        configMap:
-          name: app-three-html
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: app-three
-spec:
-  selector:
-    app: app3
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 80
-```
-
-### ingress.yaml
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: app-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  ingressClassName: traefik
-  rules:
-  - host: app1.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: app-one
-            port:
-              number: 80
-  - host: app2.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: app-two
-            port:
-              number: 80
-  defaultBackend:
-    service:
-      name: app-three
-      port:
-        number: 80
-```
-
----
-
-## 🔍 Test Adımları
-
-### 1. VM Başlat
-
-```bash
-cd p2
 vagrant up
 ```
+Bu komut, `Vagrantfile` dosyasını okuyarak aşağıdaki işlemleri otomatik olarak yapar:
+*   **Controller Düğümü (`ercdenizS`):**
+    *   IP: `192.168.56.110`, 1 CPU, 1024MB RAM
+    *   `scripts/install_k3s_server.sh` betiğini çalıştırarak K3s'i kurar ve agent'ın katılması için bir *join token* oluşturur.
+*   **Agent Düğümü (`ercdenizSW`):**
+    *   IP: `192.168.56.111`, 1 CPU, 512MB RAM
+    *   `scripts/install_k3s_agent.sh` betiğini çalıştırarak, controller tarafından paylaşılan token'ı kullanır ve cluster'a katılır.
 
-### 2. Uygulamaları deploy et
-
-```bash
-vagrant ssh ercdenizS
-kubectl apply -f /vagrant/conf/
-```
-
-### 3. Test (VM içinde veya host'ta)
-
-* `/etc/hosts` dosyasına ekle:
-
-```
-192.168.56.110 app1.com app2.com fallback.com
-```
-
-* Tarayıcıdan veya terminalden test:
-
-```bash
-curl -H "Host: app1.com" http://192.168.56.110
-curl -H "Host: app2.com" http://192.168.56.110
-curl -H "Host: fallback.com" http://192.168.56.110
-```
+**Beklenen Sonuç:** `vagrant up` tamamlandığında, `kubectl get nodes -o wide` komutunu çalıştırabileceğiniz, tam işlevsel bir K3s cluster'ınız olur.
 
 ---
 
-## ℹ️ Traefik Nedir?
+## Bölüm 2: K3s & 3 Uygulama ile Ingress Kurulumu (`p2`)
 
-* K3s ile birlikte gelen varsayılan **Ingress Controller**.
-* Gelen trafiği HTTP header'larına, path'lere veya domain'e göre servis'lere yönlendirir.
-* Alternatifleri:
+Bu bölümde, K3s'in dahili Traefik Ingress denetleyicisi kullanılarak, gelen isteğin `Host` başlığına göre farklı uygulamalara yönlendirilmesi sağlanır.
 
-  * NGINX Ingress Controller
-  * HAProxy Ingress
-  * Istio / Linkerd (Service Mesh)
+**Anahtar Kavram:** Kubernetes'te `Ingress` kaynaklarının, dış dünyadan gelen L7 (HTTP/S) trafiğini cluster içindeki servislere nasıl akıllıca dağıttığını anlamak.
+
+### Kurulum ve Dağıtım
+
+1.  `p2` dizinine gidin ve tek sunuculu test ortamını kurun:
+    ```bash
+    cd p2
+    vagrant up
+    ```
+2.  Sanal makineye bağlanın ve uygulama manifestolarını `kubectl` ile cluster'a uygulayın:
+    ```bash
+    vagrant ssh
+    # Cluster'a 3 uygulamayı ve Ingress kurallarını dağıt
+    sudo kubectl apply -f /vagrant/conf/my-apps.yaml
+    # Traefik dashboard'u için erişim kuralını dağıt
+    sudo kubectl apply -f /vagrant/conf/dashboard-ingressroute.yaml
+    exit
+    ```
+
+### Uygulamalara Erişim
+
+Erişim için yerel makinenizin `hosts` dosyasını (`/etc/hosts` veya `C:\Windows\System32\drivers\etc\hosts`) düzenleyerek aşağıdaki satırı ekleyin:
+```
+192.168.56.110 app1.com app2.com traefik.local
+```
+Artık tarayıcınızdan erişebilirsiniz:
+*   `http://app1.com` → **Uygulama 1**
+*   `http://app2.com` → **Uygulama 2** (Bu uygulama 3 replica ile çalışır)
+*   `http://192.168.56.110` → **Varsayılan Uygulama 3**
+*   `http://traefik.local/dashboard/` → **Traefik Yönetim Paneli**
 
 ---
 
-## 🎯 Trafik Akış Diyagramı
+## Bölüm 3: K3d & Argo CD ile GitOps Otomasyonu (`p3`)
 
+Projenin zirve noktası olan bu bölümde, tüm manuel `kubectl` adımları ortadan kaldırılır. Argo CD, bir Git deposunu "tek doğru kaynak" olarak kabul eder ve cluster'ın durumunu sürekli olarak bu depoyla senkronize halde tutar.
+
+**Anahtar Kavram (GitOps):** Altyapı ve uygulamaların durumunu, versiyon kontrol sisteminde (Git) deklaratif olarak tanımlama ve bu durumu bir otomasyon aracıyla (Argo CD) sürekli olarak canlı sisteme uygulama pratiğidir. **"Cluster'ı `git push` ile yönetmek."**
+
+### Otomasyonu Başlatma
+
+`p3` dizininde, `Makefile` tüm süreci yönetir:
+```bash
+make setup
 ```
-Kullanıcı (curl veya tarayıcı)
-        │
-        ▼
-  http://app1.com
-        │
-        ▼
-  [Traefik Ingress]
-        │
- └─────────────────────────────────┘
- ▼                                         ▼
-app-one                                app-two (3 replica)
-                                               ▼
-                                           app-three (fallback)
-```
+Bu komut, bir dizi betiği tetikleyerek şunları yapar:
+1.  **Gereksinim Kontrolü:** `docker`, `kubectl`, `k3d`'nin varlığını denetler.
+2.  **Cluster Oluşturma:** Docker üzerinde `k3d` ile hafif bir K3s cluster'ı kurar.
+3.  **Namespace Hazırlığı:** `argocd` ve `dev` namespace'lerini oluşturur.
+4.  **Argo CD Kurulumu:** Argo CD'yi kendi namespace'ine kurar.
+5.  **GitOps Bağlantısı:** `confs/app.yaml` dosyasını cluster'a uygular. Bu dosya, Argo CD'ye şu talimatı verir:
+    > **"Bu GitHub deposundaki (`TufanKurukaya/tkurukay`) `conf` klasörünü izle ve içindeki tüm YAML'leri bu cluster'ın `dev` namespace'ine otomatik olarak uygula. Değişiklikleri anında senkronize et, silinenleri temizle ve manuel müdahaleleri geri al."**
+6.  **Erişim Bilgileri:** Argo CD arayüzü için port yönlendirmeyi başlatır ve şifreyi ekrana basar.
+### Gerekli Olabilecek Komutlar 
+*   📜 **[Komut Referansı](./CHEATSHEET.md):** Projede kullanılan Vagrant, kubectl ve K3s komutları için hızlı başvuru kılavuzu.
+### Makefile Komutları
 
+`p3` dizinindeki otomasyonu yönetmek için kullanışlı komutlar:
 
-makine silindiği halde bu makine zaten var gibi bir hata alırsak VirtualBox'ın yoluna gidip makineyi silip tekrar deneyebiliriz.
-
-
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   DEVELOPER     │    │   GITHUB REPO   │    │   ARGO CD       │
-│                 │───▶│                 │───▶│                 │
-│ - Code değişir  │    │ - YAML files    │    │ - Değişiklikleri│
-│ - Git push      │    │ - deploy.yaml   │    │   algılıyor     │
-│                 │    │ - service.yaml  │    │ - Sync yapıyor  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                        │
-                                                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   END USER      │    │   APPLICATION   │    │   KUBERNETES    │
-│                 │◀───│                 │◀───│                 │
-│ - Browser'dan   │    │ - Pod çalışıyor │    │ - Cluster       │
-│   erişiyor      │    │ - Port 8888     │    │ - Namespaces    │
-│ - API response  │    │ - v1 veya v2    │    │ - Services      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-```
-+-------------------------------+
-|         Kubernetes Cluster    |
-|                               |
-|  [Namespace: argocd]          |
-|    - argocd-server            |
-|    - argocd-repo-server       |
-|    - ...                      |
-|                               |
-|  [Namespace: dev]             |
-|    - wil-playground-pod       |
-|    - wil-playground-service   |
-|    - wil-playground-deployment|
-+-------------------------------+
-```
+| Komut | Açıklama |
+| :--- | :--- |
+| `make setup` | Tüm GitOps ortamını sıfırdan kurar. |
+| `make clean` | Kurulan K3d cluster'ını ve tüm kalıntıları temizler. |
+| `make status` | Cluster ve pod'ların genel durumunu özetler. |
+| `make guide` | Argo CD arayüzü için erişim linkini ve kimlik bilgilerini gösterir. |
+| `make pass` | Sadece Argo CD yönetici şifresini yeniden gösterir. |
+| `make help` | Bu yardım menüsünü görüntüler. |
